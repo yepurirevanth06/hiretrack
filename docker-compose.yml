@@ -1,0 +1,19 @@
+services:
+  db:
+    image: postgres:17
+    container_name: hiretrack-db
+    environment:
+      POSTGRES_USER: hiretrack
+      POSTGRES_PASSWORD: hiretrack
+      POSTGRES_DB: hiretrack
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U hiretrack -d hiretrack" ]
+      interval: 5s
+      retries: 5
+
+volumes:
+  pgdata:
