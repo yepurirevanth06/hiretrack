@@ -1,17 +1,17 @@
-from typing import Annotated
-
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter
 from sqlalchemy import text
-from sqlalchemy.orm import Session
+from sqlalchemy.exc import OperationalError
 
-from app.db.session import get_db
+from app.api.deps import DbSession
+from app.core.exceptions import ServiceUnavailableError
 
 router = APIRouter(tags=["health"])
-
-DbSession = Annotated[Session, Depends(get_db)]
 
 
 @router.get("/health")
 def health(db: DbSession):
-    db.execute(text("SELECT 1"))
+    try:
+        db.execute(text("SELECT 1"))
+    except OperationalError as exc:
+        raise ServiceUnavailableError("Database is unavailable") from exc
     return {"status": "ok", "database": "ok"}

@@ -6,6 +6,7 @@ class Settings(BaseSettings):
 
     app_name: str = "HireTrack"
     database_url: str
+    db_echo: bool = False
 
 
 settings = Settings()
