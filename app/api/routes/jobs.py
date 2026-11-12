@@ -5,6 +5,7 @@ from fastapi import APIRouter, Query
 from app.api.deps import DbSession
 from app.models import Job
 from app.models.enums import JobStatus
+from app.schemas.error import ErrorResponse
 from app.schemas.job import JobPage, JobRead
 from app.services.job_service import JobService
 
@@ -30,6 +31,10 @@ def list_jobs(
     )
 
 
-@router.get("/{job_id}", response_model=JobRead)
+@router.get(
+    "/{job_id}",
+    response_model=JobRead,
+    responses={404: {"model": ErrorResponse, "description": "Job not found"}},
+)
 def get_job(job_id: int, db: DbSession) -> Job:
     return JobService(db).get(job_id)
