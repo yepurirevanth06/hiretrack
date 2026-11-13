@@ -25,3 +25,8 @@ class ServiceUnavailableError(AppError):
 class InvalidTransitionError(AppError):
     status_code = 409
     code = "invalid_transition"
+
+
+class InvalidCursorError(AppError):
+    status_code = 400
+    code = "invalid_cursor"

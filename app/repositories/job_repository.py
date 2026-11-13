@@ -1,6 +1,7 @@
+from datetime import datetime
 from typing import Literal
 
-from sqlalchemy import func, select
+from sqlalchemy import Select, func, select, tuple_
 from sqlalchemy.orm import Session
 
 from app.models import Job
@@ -27,22 +28,28 @@ class JobRepository:
         self.db.flush()
         return job
 
+    def _filtered(self, status: JobStatus | None, company_id: int | None) -> Select:
+        query = select(Job)
+        if status is not None:
+            query = query.where(Job.status == status)
+        if company_id is not None:
+            query = query.where(Job.company_id == company_id)
+        return query
+
     def find_page(
         self,
         *,
         status: JobStatus | None,
         company_id: int | None,
         limit: int,
-        offset: int,
-    ) -> tuple[list[Job], int]:
-        query = select(Job)
-        if status is not None:
-            query = query.where(Job.status == status)
-        if company_id is not None:
-            query = query.where(Job.company_id == company_id)
+        after: tuple[datetime, int] | None,
+    ) -> list[Job]:
+        query = self._filtered(status, company_id)
+        if after is not None:
+            query = query.where(tuple_(Job.created_at, Job.id) < tuple_(*after))
+        query = query.order_by(Job.created_at.desc(), Job.id.desc()).limit(limit)
+        return list(self.db.scalars(query).all())
 
-        total = self.db.scalar(select(func.count()).select_from(query.subquery())) or 0
-        items = self.db.scalars(
-            query.order_by(Job.created_at.desc(), Job.id.desc()).limit(limit).offset(offset)
-        ).all()
-        return list(items), total
+    def count(self, *, status: JobStatus | None, company_id: int | None) -> int:
+        query = self._filtered(status, company_id)
+        return self.db.scalar(select(func.count()).select_from(query.subquery())) or 0

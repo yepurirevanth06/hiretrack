@@ -29,9 +29,8 @@ class JobRead(BaseModel):
 
 class JobPage(BaseModel):
     items: list[JobRead]
-    total: int
-    limit: int
-    offset: int
+    next_cursor: str | None
+    total: int | None = None
 
 
 class JobCloseResult(BaseModel):

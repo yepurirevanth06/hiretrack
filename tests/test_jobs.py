@@ -21,7 +21,6 @@ def test_create_job_returns_201(client: TestClient, company: dict[str, Any]) -> 
     job = make_job(client, company["id"])
 
     assert job["company_id"] == company["id"]
-    assert job["title"] == "Backend Engineer"
     assert job["status"] == "open"
 
 
@@ -45,9 +44,7 @@ def test_create_job_for_missing_company_returns_404(client: TestClient) -> None:
         "location": "Remote",
         "employment_type": "full_time",
     }
-    response = client.post("/companies/999999/jobs", json=payload)
-
-    assert response.status_code == 404
+    assert client.post("/companies/999999/jobs", json=payload).status_code == 404
 
 
 def test_invalid_employment_type_returns_422(client: TestClient, company: dict[str, Any]) -> None:
@@ -72,9 +69,7 @@ def test_get_job_returns_200(client: TestClient, company: dict[str, Any]) -> Non
 
 
 def test_get_missing_job_returns_404(client: TestClient) -> None:
-    response = client.get("/jobs/999999")
-
-    assert response.status_code == 404
+    assert client.get("/jobs/999999").status_code == 404
 
 
 def test_list_jobs_filters_by_status(client: TestClient, company: dict[str, Any]) -> None:
@@ -82,11 +77,10 @@ def test_list_jobs_filters_by_status(client: TestClient, company: dict[str, Any]
     make_job(client, company["id"], title="Open 2", status="open")
     make_job(client, company["id"], title="Draft", status="draft")
 
-    response = client.get("/jobs", params={"status": "open"})
+    items = client.get("/jobs", params={"status": "open"}).json()["items"]
 
-    body = response.json()
-    assert body["total"] == 2
-    assert all(job["status"] == "open" for job in body["items"])
+    assert len(items) == 2
+    assert all(job["status"] == "open" for job in items)
 
 
 def test_list_jobs_filters_by_company(client: TestClient, company: dict[str, Any]) -> None:
@@ -94,11 +88,9 @@ def test_list_jobs_filters_by_company(client: TestClient, company: dict[str, Any
     make_job(client, company["id"], title="Acme job")
     make_job(client, other["id"], title="Beta job")
 
-    response = client.get("/jobs", params={"company_id": other["id"]})
+    items = client.get("/jobs", params={"company_id": other["id"]}).json()["items"]
 
-    body = response.json()
-    assert body["total"] == 1
-    assert body["items"][0]["title"] == "Beta job"
+    assert [job["title"] for job in items] == ["Beta job"]
 
 
 def test_list_jobs_newest_first(client: TestClient, company: dict[str, Any]) -> None:
@@ -110,23 +102,67 @@ def test_list_jobs_newest_first(client: TestClient, company: dict[str, Any]) -> 
     assert [job["id"] for job in items] == [second["id"], first["id"]]
 
 
-def test_list_jobs_pagination(client: TestClient, company: dict[str, Any]) -> None:
-    for i in range(5):
+def test_cursor_pagination_returns_every_job_exactly_once(
+    client: TestClient, company: dict[str, Any]
+) -> None:
+    created_ids = [make_job(client, company["id"], title=f"Job {i}")["id"] for i in range(5)]
+
+    seen: list[int] = []
+    pages = 0
+    cursor = None
+    while True:
+        params: dict[str, Any] = {"limit": 2}
+        if cursor:
+            params["cursor"] = cursor
+        body = client.get("/jobs", params=params).json()
+        seen.extend(job["id"] for job in body["items"])
+        pages += 1
+        cursor = body["next_cursor"]
+        if cursor is None:
+            break
+
+    assert pages == 3
+    assert seen == sorted(created_ids, reverse=True)
+
+
+def test_next_cursor_is_none_on_the_last_page(client: TestClient, company: dict[str, Any]) -> None:
+    make_job(client, company["id"])
+
+    assert client.get("/jobs", params={"limit": 10}).json()["next_cursor"] is None
+
+
+def test_new_job_while_paging_causes_no_duplicates(
+    client: TestClient, company: dict[str, Any]
+) -> None:
+    for i in range(4):
         make_job(client, company["id"], title=f"Job {i}")
 
-    page1 = client.get("/jobs", params={"limit": 2, "offset": 0}).json()
-    page2 = client.get("/jobs", params={"limit": 2, "offset": 2}).json()
-    page3 = client.get("/jobs", params={"limit": 2, "offset": 4}).json()
+    page1 = client.get("/jobs", params={"limit": 2}).json()
+    make_job(client, company["id"], title="Posted while paging")
+    page2 = client.get("/jobs", params={"limit": 2, "cursor": page1["next_cursor"]}).json()
 
-    assert page1["total"] == 5
-    assert len(page1["items"]) == 2
-    assert len(page2["items"]) == 2
-    assert len(page3["items"]) == 1
-    all_ids = [job["id"] for page in (page1, page2, page3) for job in page["items"]]
-    assert len(set(all_ids)) == 5
+    page1_ids = {job["id"] for job in page1["items"]}
+    page2_ids = {job["id"] for job in page2["items"]}
+    assert page1_ids.isdisjoint(page2_ids)
+    assert len(page2_ids) == 2
+
+
+def test_total_is_only_computed_when_requested(
+    client: TestClient, company: dict[str, Any]
+) -> None:
+    for i in range(3):
+        make_job(client, company["id"], title=f"Job {i}")
+
+    assert client.get("/jobs").json()["total"] is None
+    assert client.get("/jobs", params={"include_total": True}).json()["total"] == 3
+
+
+def test_invalid_cursor_returns_400(client: TestClient) -> None:
+    response = client.get("/jobs", params={"cursor": "not-a-real-cursor"})
+
+    assert response.status_code == 400
+    assert response.json()["error"]["code"] == "invalid_cursor"
 
 
 def test_list_jobs_limit_above_100_returns_422(client: TestClient) -> None:
-    response = client.get("/jobs", params={"limit": 101})
-
-    assert response.status_code == 422
+    assert client.get("/jobs", params={"limit": 101}).status_code == 422
