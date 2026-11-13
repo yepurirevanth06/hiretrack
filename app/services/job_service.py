@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from app.core.exceptions import NotFoundError
 from app.models import Job
 from app.models.enums import JobStatus
+from app.repositories.application_repository import ApplicationRepository
 from app.repositories.company_repository import CompanyRepository
 from app.repositories.job_repository import JobRepository
 from app.schemas.job import JobCreate
@@ -41,3 +42,18 @@ class JobService:
         return self.jobs.find_page(
             status=status, company_id=company_id, limit=limit, offset=offset
         )
+
+    def close(self, job_id: int) -> tuple[Job, int]:
+        job = self.jobs.get(job_id, lock="update")
+        if job is None:
+            raise NotFoundError(f"Job {job_id} not found")
+
+        if job.status == JobStatus.CLOSED:
+            self.db.commit()  # already closed; release the lock
+            return job, 0
+
+        job.status = JobStatus.CLOSED
+        rejected = ApplicationRepository(self.db).reject_active_for_job(job_id)
+        self.db.commit()
+        self.db.refresh(job)
+        return job, rejected

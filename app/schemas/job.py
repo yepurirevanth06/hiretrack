@@ -32,3 +32,8 @@ class JobPage(BaseModel):
     total: int
     limit: int
     offset: int
+
+
+class JobCloseResult(BaseModel):
+    job: JobRead
+    rejected_applications: int

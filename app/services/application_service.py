@@ -21,7 +21,7 @@ class ApplicationService:
         self.resumes = ResumeRepository(db)
 
     def apply(self, job_id: int, data: ApplicationCreate) -> Application:
-        job = self.jobs.get(job_id)
+        job = self.jobs.get(job_id, lock="share")
         if job is None:
             raise NotFoundError(f"Job {job_id} not found")
         if job.status != JobStatus.OPEN:

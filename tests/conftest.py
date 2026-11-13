@@ -7,7 +7,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.engine import make_url
 from sqlalchemy.orm import Session
 
-import app.models  # noqa: F401  (registers all tables on Base.metadata)
+import app.models
 from app.core.config import settings
 from app.db.base import Base
 from app.db.session import get_db

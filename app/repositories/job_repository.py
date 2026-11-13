@@ -1,3 +1,5 @@
+from typing import Literal
+
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -9,8 +11,16 @@ class JobRepository:
     def __init__(self, db: Session) -> None:
         self.db = db
 
-    def get(self, job_id: int) -> Job | None:
-        return self.db.get(Job, job_id)
+    def get(self, job_id: int, *, lock: Literal["update", "share"] | None = None) -> Job | None:
+        if lock is None:
+            return self.db.get(Job, job_id)
+        query = (
+            select(Job)
+            .where(Job.id == job_id)
+            .with_for_update(read=(lock == "share"))
+            .execution_options(populate_existing=True)
+        )
+        return self.db.scalar(query)
 
     def add(self, job: Job) -> Job:
         self.db.add(job)

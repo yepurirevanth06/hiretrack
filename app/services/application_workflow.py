@@ -21,3 +21,8 @@ ALLOWED_TRANSITIONS: dict[ApplicationStatus, frozenset[ApplicationStatus]] = {
 
 def can_transition(current: ApplicationStatus, target: ApplicationStatus) -> bool:
     return target in ALLOWED_TRANSITIONS[current]
+
+
+ACTIVE_STATUSES: frozenset[ApplicationStatus] = frozenset(
+    status for status, targets in ALLOWED_TRANSITIONS.items() if targets
+)

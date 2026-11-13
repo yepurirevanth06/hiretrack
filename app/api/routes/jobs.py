@@ -6,7 +6,7 @@ from app.api.deps import DbSession
 from app.models import Job
 from app.models.enums import JobStatus
 from app.schemas.error import ErrorResponse
-from app.schemas.job import JobPage, JobRead
+from app.schemas.job import JobCloseResult, JobPage, JobRead
 from app.services.job_service import JobService
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
@@ -38,3 +38,13 @@ def list_jobs(
 )
 def get_job(job_id: int, db: DbSession) -> Job:
     return JobService(db).get(job_id)
+
+
+@router.post(
+    "/{job_id}/close",
+    response_model=JobCloseResult,
+    responses={404: {"model": ErrorResponse, "description": "Job not found"}},
+)
+def close_job(job_id: int, db: DbSession) -> JobCloseResult:
+    job, rejected = JobService(db).close(job_id)
+    return JobCloseResult(job=JobRead.model_validate(job), rejected_applications=rejected)

@@ -1,7 +1,9 @@
-from sqlalchemy import select
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
 from app.models import Application
+from app.models.enums import ApplicationStatus
+from app.services.application_workflow import ACTIVE_STATUSES
 
 
 class ApplicationRepository:
@@ -33,3 +35,14 @@ class ApplicationRepository:
         self.db.add(application)
         self.db.flush()
         return application
+
+    def reject_active_for_job(self, job_id: int) -> int:
+        result = self.db.execute(
+            update(Application)
+            .where(
+                Application.job_id == job_id,
+                Application.status.in_(ACTIVE_STATUSES),
+            )
+            .values(status=ApplicationStatus.REJECTED, updated_at=func.now())
+        )
+        return result.rowcount
