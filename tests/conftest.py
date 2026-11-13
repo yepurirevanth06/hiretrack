@@ -90,3 +90,18 @@ def resume(client: TestClient, candidate: dict[str, Any]) -> dict[str, Any]:
     )
     assert response.status_code == 201
     return response.json()
+
+
+@pytest.fixture
+def query_counter(db: Session) -> Iterator[dict[str, int]]:
+    from sqlalchemy import event
+
+    counter = {"selects": 0}
+
+    def count_selects(conn, cursor, statement, parameters, context, executemany) -> None:
+        if statement.lstrip().upper().startswith("SELECT"):
+            counter["selects"] += 1
+
+    event.listen(engine, "before_cursor_execute", count_selects)
+    yield counter
+    event.remove(engine, "before_cursor_execute", count_selects)

@@ -1,5 +1,5 @@
 from sqlalchemy import func, select, update
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.models import Application
 from app.models.enums import ApplicationStatus
@@ -26,6 +26,7 @@ class ApplicationRepository:
     def list_for_candidate(self, candidate_id: int) -> list[Application]:
         query = (
             select(Application)
+            .options(joinedload(Application.job), joinedload(Application.resume))
             .where(Application.candidate_id == candidate_id)
             .order_by(Application.created_at.desc(), Application.id.desc())
         )

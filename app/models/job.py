@@ -15,7 +15,8 @@ class Job(TimestampMixin, Base):
     __tablename__ = "jobs"
     __table_args__ = (
         Index("ix_jobs_company_id_status", "company_id", "status"),
-        Index("ix_jobs_status_created_at", "status", "created_at"),
+        Index("ix_jobs_status_created_at_id", "status", "created_at", "id"),
+        Index("ix_jobs_created_at_id", "created_at", "id"),
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
