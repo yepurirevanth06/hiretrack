@@ -1,0 +1,35 @@
+from sqlalchemy import select
+from sqlalchemy.orm import Session
+
+from app.models import Application
+
+
+class ApplicationRepository:
+    def __init__(self, db: Session) -> None:
+        self.db = db
+
+    def get(self, application_id: int, *, for_update: bool = False) -> Application | None:
+        query = select(Application).where(Application.id == application_id)
+        if for_update:
+            query = query.with_for_update().execution_options(populate_existing=True)
+        return self.db.scalar(query)
+
+    def get_by_job_and_candidate(self, job_id: int, candidate_id: int) -> Application | None:
+        return self.db.scalar(
+            select(Application).where(
+                Application.job_id == job_id, Application.candidate_id == candidate_id
+            )
+        )
+
+    def list_for_candidate(self, candidate_id: int) -> list[Application]:
+        query = (
+            select(Application)
+            .where(Application.candidate_id == candidate_id)
+            .order_by(Application.created_at.desc(), Application.id.desc())
+        )
+        return list(self.db.scalars(query).all())
+
+    def add(self, application: Application) -> Application:
+        self.db.add(application)
+        self.db.flush()
+        return application

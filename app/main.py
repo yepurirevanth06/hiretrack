@@ -1,7 +1,7 @@
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
-from app.api.routes import companies, health, jobs
+from app.api.routes import applications, candidates, companies, health, jobs
 from app.core.config import settings
 from app.core.exceptions import AppError
 
@@ -19,3 +19,5 @@ async def handle_app_error(request: Request, exc: AppError) -> JSONResponse:
 app.include_router(health.router)
 app.include_router(companies.router)
 app.include_router(jobs.router)
+app.include_router(candidates.router)
+app.include_router(applications.router)

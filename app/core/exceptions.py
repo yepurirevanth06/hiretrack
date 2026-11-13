@@ -20,3 +20,8 @@ class ConflictError(AppError):
 class ServiceUnavailableError(AppError):
     status_code = 503
     code = "service_unavailable"
+
+
+class InvalidTransitionError(AppError):
+    status_code = 409
+    code = "invalid_transition"

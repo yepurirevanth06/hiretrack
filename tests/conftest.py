@@ -53,3 +53,40 @@ def company(client: TestClient) -> dict[str, Any]:
     response = client.post("/companies", json={"name": "Acme Corp", "slug": "acme-corp"})
     assert response.status_code == 201
     return response.json()
+
+
+@pytest.fixture
+def open_job(client: TestClient, company: dict[str, Any]) -> dict[str, Any]:
+    payload = {
+        "title": "Backend Engineer",
+        "description": "Build APIs with Python",
+        "location": "Remote",
+        "employment_type": "full_time",
+        "status": "open",
+    }
+    response = client.post(f"/companies/{company['id']}/jobs", json=payload)
+    assert response.status_code == 201
+    return response.json()
+
+
+@pytest.fixture
+def candidate(client: TestClient) -> dict[str, Any]:
+    response = client.post(
+        "/candidates", json={"email": "x@example.com", "full_name": "Candidate X"}
+    )
+    assert response.status_code == 201
+    return response.json()
+
+
+@pytest.fixture
+def resume(client: TestClient, candidate: dict[str, Any]) -> dict[str, Any]:
+    response = client.post(
+        f"/candidates/{candidate['id']}/resumes",
+        json={
+            "name": "Backend Resume v1",
+            "file_key": "resumes/x/v1.pdf",
+            "file_hash": "a" * 64,
+        },
+    )
+    assert response.status_code == 201
+    return response.json()
