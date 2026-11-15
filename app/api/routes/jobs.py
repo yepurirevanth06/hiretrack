@@ -2,25 +2,24 @@ from typing import Annotated
 
 from fastapi import APIRouter, Query
 
-from app.api.deps import DbSession
+from app.api.deps import CurrentRecruiter, DbSession, OptionalUser
+from app.api.responses import AUTH_ERRORS, error
 from app.models import Job
 from app.models.enums import JobStatus
-from app.schemas.error import ErrorResponse
 from app.schemas.job import JobCloseResult, JobPage, JobRead
 from app.services.job_service import JobService
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
 
-JOB_NOT_FOUND = {404: {"model": ErrorResponse, "description": "Job not found"}}
-
 
 @router.get(
     "",
     response_model=JobPage,
-    responses={400: {"model": ErrorResponse, "description": "Invalid cursor"}},
+    responses={**error(400, "Invalid cursor"), **error(401, "Invalid token")},
 )
 def list_jobs(
     db: DbSession,
+    viewer: OptionalUser,
     status: JobStatus | None = None,
     company_id: int | None = None,
     limit: Annotated[int, Query(ge=1, le=100)] = 20,
@@ -33,6 +32,7 @@ def list_jobs(
         limit=limit,
         cursor=cursor,
         include_total=include_total,
+        viewer=viewer,
     )
     return JobPage(
         items=[JobRead.model_validate(job) for job in items],
@@ -41,12 +41,16 @@ def list_jobs(
     )
 
 
-@router.get("/{job_id}", response_model=JobRead, responses=JOB_NOT_FOUND)
-def get_job(job_id: int, db: DbSession) -> Job:
-    return JobService(db).get(job_id)
+@router.get("/{job_id}", response_model=JobRead, responses=error(404, "Job not found"))
+def get_job(job_id: int, db: DbSession, viewer: OptionalUser) -> Job:
+    return JobService(db).get(job_id, viewer)
 
 
-@router.post("/{job_id}/close", response_model=JobCloseResult, responses=JOB_NOT_FOUND)
-def close_job(job_id: int, db: DbSession) -> JobCloseResult:
-    job, rejected = JobService(db).close(job_id)
+@router.post(
+    "/{job_id}/close",
+    response_model=JobCloseResult,
+    responses={**AUTH_ERRORS, **error(404, "Job not found")},
+)
+def close_job(job_id: int, db: DbSession, user: CurrentRecruiter) -> JobCloseResult:
+    job, rejected = JobService(db).close(job_id, user)
     return JobCloseResult(job=JobRead.model_validate(job), rejected_applications=rejected)

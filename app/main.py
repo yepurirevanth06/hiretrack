@@ -1,7 +1,7 @@
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
-from app.api.routes import applications, auth, candidates, companies, health, jobs
+from app.api.routes import applications, auth, candidates, companies, health, jobs, me
 from app.core.config import settings
 from app.core.exceptions import AppError
 
@@ -24,3 +24,4 @@ app.include_router(companies.router)
 app.include_router(jobs.router)
 app.include_router(candidates.router)
 app.include_router(applications.router)
+app.include_router(me.router)
