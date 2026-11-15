@@ -1,7 +1,7 @@
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
-from app.api.routes import applications, candidates, companies, health, jobs
+from app.api.routes import applications, auth, candidates, companies, health, jobs
 from app.core.config import settings
 from app.core.exceptions import AppError
 
@@ -10,13 +10,16 @@ app = FastAPI(title=settings.app_name)
 
 @app.exception_handler(AppError)
 async def handle_app_error(request: Request, exc: AppError) -> JSONResponse:
+    headers = {"WWW-Authenticate": "Bearer"} if exc.status_code == 401 else None
     return JSONResponse(
         status_code=exc.status_code,
         content={"error": {"code": exc.code, "message": exc.message}},
+        headers=headers,
     )
 
 
 app.include_router(health.router)
+app.include_router(auth.router)
 app.include_router(companies.router)
 app.include_router(jobs.router)
 app.include_router(candidates.router)

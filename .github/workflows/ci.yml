@@ -26,6 +26,7 @@ jobs:
 
     env:
       DATABASE_URL: postgresql+psycopg://hiretrack:hiretrack@localhost:5432/hiretrack
+      JWT_SECRET: test-secret-not-for-production
 
     steps:
       - name: Check out the code
