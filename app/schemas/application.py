@@ -6,7 +6,6 @@ from app.models.enums import ApplicationStatus
 
 
 class ApplicationCreate(BaseModel):
-    candidate_id: int
     resume_id: int
 
 

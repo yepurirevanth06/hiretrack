@@ -1,14 +1,18 @@
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.core.exceptions import ConflictError, InvalidTransitionError, NotFoundError
-from app.models import Application
-from app.models.enums import ApplicationStatus, JobStatus
+from app.core.exceptions import (
+    ConflictError,
+    ForbiddenError,
+    InvalidTransitionError,
+    NotFoundError,
+)
+from app.models import Application, User
+from app.models.enums import ApplicationStatus, JobStatus, UserRole
 from app.repositories.application_repository import ApplicationRepository
-from app.repositories.candidate_repository import CandidateRepository
 from app.repositories.job_repository import JobRepository
 from app.repositories.resume_repository import ResumeRepository
-from app.schemas.application import ApplicationCreate
+from app.services.access import can_view_job, is_company_recruiter
 from app.services.application_workflow import can_transition
 
 
@@ -17,33 +21,25 @@ class ApplicationService:
         self.db = db
         self.applications = ApplicationRepository(db)
         self.jobs = JobRepository(db)
-        self.candidates = CandidateRepository(db)
         self.resumes = ResumeRepository(db)
 
-    def apply(self, job_id: int, data: ApplicationCreate) -> Application:
+    def apply(self, job_id: int, candidate_id: int, resume_id: int) -> Application:
         job = self.jobs.get(job_id, lock="share")
-        if job is None:
+        if job is None or job.status != JobStatus.OPEN:
             raise NotFoundError(f"Job {job_id} not found")
-        if job.status != JobStatus.OPEN:
-            raise ConflictError("This job is not accepting applications")
 
-        if self.candidates.get(data.candidate_id) is None:
-            raise NotFoundError(f"Candidate {data.candidate_id} not found")
-
-        resume = self.resumes.get(data.resume_id)
+        resume = self.resumes.get(resume_id)
         if (
             resume is None
-            or resume.candidate_id != data.candidate_id
+            or resume.candidate_id != candidate_id
             or resume.deleted_at is not None
         ):
-            raise NotFoundError(f"Resume {data.resume_id} not found")
+            raise NotFoundError(f"Resume {resume_id} not found")
 
-        if self.applications.get_by_job_and_candidate(job_id, data.candidate_id):
+        if self.applications.get_by_job_and_candidate(job_id, candidate_id):
             raise ConflictError("You have already applied to this job")
 
-        application = Application(
-            job_id=job_id, candidate_id=data.candidate_id, resume_id=resume.id
-        )
+        application = Application(job_id=job_id, candidate_id=candidate_id, resume_id=resume.id)
         try:
             self.applications.add(application)
             self.db.commit()
@@ -54,18 +50,28 @@ class ApplicationService:
         self.db.refresh(application)
         return application
 
-    def get(self, application_id: int) -> Application:
+    def get_for_viewer(self, application_id: int, viewer: User) -> Application:
         application = self.applications.get(application_id)
-        if application is None:
+        if application is None or not self._can_view(application, viewer):
             raise NotFoundError(f"Application {application_id} not found")
         return application
 
+    def _can_view(self, application: Application, viewer: User) -> bool:
+        return viewer.candidate_id == application.candidate_id or is_company_recruiter(
+            viewer, application.job.company_id
+        )
+
     def change_status(
-        self, application_id: int, new_status: ApplicationStatus
+        self, application_id: int, new_status: ApplicationStatus, user: User
     ) -> Application:
         application = self.applications.get(application_id, for_update=True)
-        if application is None:
+        if application is None or not self._can_view(application, user):
             raise NotFoundError(f"Application {application_id} not found")
+
+        if user.role == UserRole.CANDIDATE and new_status != ApplicationStatus.WITHDRAWN:
+            raise ForbiddenError("Candidates can only withdraw their own applications")
+        if user.role == UserRole.RECRUITER and new_status == ApplicationStatus.WITHDRAWN:
+            raise ForbiddenError("Only the candidate can withdraw an application")
 
         if application.status == new_status:
             self.db.commit()  # nothing to change; release the row lock
@@ -82,6 +88,12 @@ class ApplicationService:
         return application
 
     def list_for_candidate(self, candidate_id: int) -> list[Application]:
-        if self.candidates.get(candidate_id) is None:
-            raise NotFoundError(f"Candidate {candidate_id} not found")
         return self.applications.list_for_candidate(candidate_id)
+
+    def list_for_job(self, job_id: int, user: User) -> list[Application]:
+        job = self.jobs.get(job_id)
+        if job is None or not can_view_job(user, job):
+            raise NotFoundError(f"Job {job_id} not found")
+        if not is_company_recruiter(user, job.company_id):
+            raise ForbiddenError("Only the job's company can see its applicants")
+        return self.applications.list_for_job(job_id)

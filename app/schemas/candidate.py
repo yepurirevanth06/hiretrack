@@ -1,12 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
-
-
-class CandidateCreate(BaseModel):
-    email: EmailStr
-    full_name: str = Field(min_length=1, max_length=200)
-    phone: str | None = Field(default=None, max_length=30)
+from pydantic import BaseModel, ConfigDict
 
 
 class CandidateRead(BaseModel):

@@ -1,7 +1,7 @@
 from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session, joinedload
 
-from app.models import Application
+from app.models import Application, Job
 from app.models.enums import ApplicationStatus
 from app.services.application_workflow import ACTIVE_STATUSES
 
@@ -31,6 +31,23 @@ class ApplicationRepository:
             .order_by(Application.created_at.desc(), Application.id.desc())
         )
         return list(self.db.scalars(query).all())
+
+    def list_for_job(self, job_id: int) -> list[Application]:
+        query = (
+            select(Application)
+            .where(Application.job_id == job_id)
+            .order_by(Application.created_at.desc(), Application.id.desc())
+        )
+        return list(self.db.scalars(query).all())
+
+    def candidate_applied_to_company(self, candidate_id: int, company_id: int) -> bool:
+        query = (
+            select(Application.id)
+            .join(Job, Job.id == Application.job_id)
+            .where(Application.candidate_id == candidate_id, Job.company_id == company_id)
+            .limit(1)
+        )
+        return self.db.scalar(query) is not None
 
     def add(self, application: Application) -> Application:
         self.db.add(application)
