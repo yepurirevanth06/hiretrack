@@ -9,8 +9,8 @@ from sqlalchemy import create_engine
 from sqlalchemy.engine import make_url
 from sqlalchemy.orm import Session
 
-import app.core.security as security
 import app.models
+from app.core import security
 from app.core.config import settings
 from app.core.security import create_access_token
 from app.db.base import Base
