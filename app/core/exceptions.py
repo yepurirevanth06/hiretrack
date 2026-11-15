@@ -30,3 +30,13 @@ class InvalidTransitionError(AppError):
 class InvalidCursorError(AppError):
     status_code = 400
     code = "invalid_cursor"
+
+
+class UnauthorizedError(AppError):
+    status_code = 401
+    code = "unauthorized"
+
+
+class ForbiddenError(AppError):
+    status_code = 403
+    code = "forbidden"

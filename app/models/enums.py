@@ -35,3 +35,9 @@ def enum_column(enum_cls: type[StrEnum], name: str) -> SAEnum:
         length=20,
         values_callable=lambda e: [member.value for member in e],
     )
+
+
+class UserRole(StrEnum):
+    CANDIDATE = "candidate"
+    RECRUITER = "recruiter"
+    ADMIN = "admin"
