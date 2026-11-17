@@ -15,6 +15,7 @@ from app.core.config import settings
 from app.core.security import create_access_token
 from app.db.base import Base
 from app.db.session import get_db
+from app.db.tenant import BYPASS_KEY, TENANT_KEY, reapply
 from app.main import app
 
 # Argon2 is deliberately slow. Tests use the cheapest valid settings so the
@@ -45,6 +46,9 @@ def db() -> Iterator[Session]:
         join_transaction_mode="create_savepoint",
         expire_on_commit=False,
     )
+    # Test code reads the database as the superuser, so assertions can see
+    # every row. Requests made through `client` run under RLS, like production.
+    session.info[BYPASS_KEY] = True
     yield session
     session.close()
     transaction.rollback()
@@ -54,12 +58,16 @@ def db() -> Iterator[Session]:
 @pytest.fixture
 def client(db: Session) -> Iterator[TestClient]:
     def override_get_db() -> Iterator[Session]:
+        db.info[BYPASS_KEY] = False
+        reapply(db)
         try:
             yield db
         finally:
             # Like the real get_db: whatever a request didn't commit, even when
             # it fails with an error, is thrown away.
             db.rollback()
+            db.info.pop(TENANT_KEY, None)
+            db.info[BYPASS_KEY] = True
 
     app.dependency_overrides[get_db] = override_get_db
     with TestClient(app) as test_client:

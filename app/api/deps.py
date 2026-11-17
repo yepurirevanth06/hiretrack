@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from app.core.exceptions import ForbiddenError, UnauthorizedError
 from app.core.security import decode_access_token
 from app.db.session import get_db
+from app.db.tenant import set_tenant
 from app.models import User
 from app.models.enums import UserRole
 
@@ -21,6 +22,8 @@ def _user_from_token(db: Session, token: str) -> User:
     user = db.get(User, user_id)
     if user is None or not user.is_active:
         raise UnauthorizedError("Invalid or expired token")
+    # From here on, the database itself limits which rows this request can see.
+    set_tenant(db, company_id=user.company_id, candidate_id=user.candidate_id)
     return user
 
 

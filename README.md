@@ -51,6 +51,10 @@ Request -> Route (HTTP only) -> Service (business rules, transactions) -> Reposi
 - **Logout:** `/auth/logout` ends one session, `/auth/logout-all` ends every session for the user. A row lock on the token prevents two simultaneous refreshes from both succeeding.
 - **Audit log:** logins, logouts, token reuse, application status changes and job closures are written to `audit_events` in the same transaction as the change, so a change is never saved without its audit row. A database trigger rejects any UPDATE or DELETE, making the log append-only. `GET /applications/{id}/history` shows an application's timeline.
 - **Error contract:** 401 responses include a `WWW-Authenticate: Bearer` header.
+- **Row-level security:** every request runs as a restricted `hiretrack_app` database role with the user's company or candidate id set for that transaction. A PostgreSQL policy on `applications` hides other tenants' rows, so a missing permission check in Python still can't leak data.
+- **Least privilege:** the app role can't update or delete audit rows, can't truncate tables and isn't a table owner, so it can't switch RLS off.
+- **CORS and security headers:** only configured browser origins may call the API, and every response sets `X-Content-Type-Options`, `X-Frame-Options`, `Content-Security-Policy`, `Referrer-Policy`, `Cache-Control: no-store` and `Strict-Transport-Security`.
+- **OWASP review:** see [docs/security-review.md](docs/security-review.md) for what is covered and what is still missing.
 
 ## Performance
 
@@ -84,12 +88,12 @@ docker compose exec db psql -U hiretrack -d hiretrack -c "CREATE DATABASE hiretr
 uv run pytest --cov=app
 ```
 
-118 unit and integration tests run against an isolated PostgreSQL database. Each test runs inside a transaction that is rolled back afterwards, and anything a request doesn't commit is discarded, just like in production. CI runs linting, migrations, a migration drift check and the full test suite on every push and pull request.
+130 unit and integration tests run against an isolated PostgreSQL database. Each test runs inside a transaction that is rolled back afterwards, and anything a request doesn't commit is discarded, just like in production. CI runs linting, migrations, a migration drift check and the full test suite on every push and pull request.
 
 ## Roadmap
 
 - [x] Stage 1: Core API, data modeling, testing, query performance
-- [ ] Stage 2: Security (in progress). Done: authentication, authorization, multi-tenancy, refresh token rotation, logout, audit log. Next: RLS, CORS, security headers
+- [x] Stage 2: Security: authentication, authorization, multi-tenancy, refresh token rotation, audit log, row-level security, CORS, security headers
 - [ ] Stage 3: Caching, rate limiting and load testing
 - [ ] Stage 4: Background jobs, file uploads and notifications
 - [ ] Stage 5: Search, AI matching and observability
