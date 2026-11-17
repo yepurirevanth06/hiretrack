@@ -2,12 +2,13 @@ from fastapi import APIRouter, status
 
 from app.api.deps import CurrentCandidate, CurrentRecruiter, CurrentUser, DbSession
 from app.api.responses import AUTH_ERRORS, error
-from app.models import Application
+from app.models import Application, AuditEvent
 from app.schemas.application import (
     ApplicationCreate,
     ApplicationRead,
     ApplicationStatusUpdate,
 )
+from app.schemas.audit import AuditEventRead
 from app.services.application_service import ApplicationService
 
 router = APIRouter(tags=["applications"])
@@ -26,7 +27,9 @@ router = APIRouter(tags=["applications"])
 def apply_to_job(
     job_id: int, data: ApplicationCreate, db: DbSession, user: CurrentCandidate
 ) -> Application:
-    return ApplicationService(db).apply(job_id, user.candidate_id, data.resume_id)
+    return ApplicationService(db).apply(
+        job_id, user.candidate_id, data.resume_id, actor_user_id=user.id
+    )
 
 
 @router.get(
@@ -62,3 +65,14 @@ def change_application_status(
     application_id: int, data: ApplicationStatusUpdate, db: DbSession, user: CurrentUser
 ) -> Application:
     return ApplicationService(db).change_status(application_id, data.status, user)
+
+
+@router.get(
+    "/applications/{application_id}/history",
+    response_model=list[AuditEventRead],
+    responses={**AUTH_ERRORS, **error(404, "Application not found")},
+)
+def get_application_history(
+    application_id: int, db: DbSession, user: CurrentUser
+) -> list[AuditEvent]:
+    return ApplicationService(db).history(application_id, user)

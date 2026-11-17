@@ -54,13 +54,15 @@ class ApplicationRepository:
         self.db.flush()
         return application
 
-    def reject_active_for_job(self, job_id: int) -> int:
-        result = self.db.execute(
+    def reject_active_for_job(self, job_id: int) -> list[int]:
+        """Rejects every active application in one UPDATE and returns their ids."""
+        result = self.db.scalars(
             update(Application)
             .where(
                 Application.job_id == job_id,
                 Application.status.in_(ACTIVE_STATUSES),
             )
             .values(status=ApplicationStatus.REJECTED, updated_at=func.now())
+            .returning(Application.id)
         )
-        return result.rowcount
+        return list(result.all())
