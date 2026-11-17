@@ -1,3 +1,5 @@
+import hashlib
+import secrets
 from datetime import UTC, datetime, timedelta
 
 import jwt
@@ -51,3 +53,16 @@ def decode_access_token(token: str) -> int:
     if payload.get("type") != "access":
         raise UnauthorizedError("Invalid or expired token")
     return int(payload["sub"])
+
+
+def generate_refresh_token() -> str:
+    """A random, unguessable string (256 bits). It is not a JWT: it only means
+    something because the server keeps a record of it."""
+    return secrets.token_urlsafe(32)
+
+
+def hash_refresh_token(token: str) -> str:
+    """SHA-256 is enough here (unlike passwords) because the token is already
+    long and random, so it can't be guessed by brute force. A fast hash also
+    lets us look the token up by its hash."""
+    return hashlib.sha256(token.encode()).hexdigest()

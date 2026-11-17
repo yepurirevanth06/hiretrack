@@ -40,13 +40,16 @@ Request -> Route (HTTP only) -> Service (business rules, transactions) -> Reposi
 ## Security
 
 - **Password storage:** Argon2 hashing via `pwdlib`; plain passwords are never stored or logged.
-- **Authentication:** JWT access tokens (HS256, 30 min expiry). Tokens require `exp` and `sub`, carry a `type: access` claim, and are decoded against an explicit algorithm allow-list.
+- **Authentication:** short-lived JWT access tokens (HS256, 15 min expiry). Tokens require `exp` and `sub`, carry a `type: access` claim, and are decoded against an explicit algorithm allow-list.
 - **User enumeration protection:** login returns the same error for an unknown email and a wrong password, and verifies against a dummy hash when the user doesn't exist, so response timing doesn't reveal which emails are registered.
 - **Role-based access:** candidate and recruiter roles are enforced through FastAPI dependencies (`CurrentUser`, `CurrentRecruiter`, `CurrentCandidate`).
 - **Multi-tenancy:** recruiters are scoped to their own company via `company_id`; database check constraints guarantee every recruiter has a company and every candidate has a profile.
 - **IDOR prevention:** identity always comes from the token, never from the request body. Candidates use `/me` routes, and `candidate_id` was removed from the apply payload.
 - **Visibility policy:** 404 when the caller can't see a resource (so its existence isn't leaked), 403 when they can see it but aren't allowed to act on it. Draft and closed jobs are hidden from the public.
 - **Workflow permissions:** only the candidate can withdraw an application; only the company's recruiter can move it through screening, interview, offer, hired, or rejected.
+- **Refresh tokens:** 7-day opaque tokens stored only as SHA-256 hashes. Every refresh rotates the token, and replaying an already-used token revokes that whole session (token family), which shuts out a thief who copied it.
+- **Logout:** `/auth/logout` ends one session, `/auth/logout-all` ends every session for the user. A row lock on the token prevents two simultaneous refreshes from both succeeding.
+- **Audit log:** logins, logouts, token reuse, application status changes and job closures are written to `audit_events` in the same transaction as the change, so a change is never saved without its audit row. A database trigger rejects any UPDATE or DELETE, making the log append-only. `GET /applications/{id}/history` shows an application's timeline.
 - **Error contract:** 401 responses include a `WWW-Authenticate: Bearer` header.
 
 ## Performance
@@ -81,12 +84,12 @@ docker compose exec db psql -U hiretrack -d hiretrack -c "CREATE DATABASE hiretr
 uv run pytest --cov=app
 ```
 
-67 unit and integration tests run against an isolated PostgreSQL database. Each test runs inside a transaction that is rolled back afterwards. CI runs linting, migrations, a migration drift check and the full test suite on every push and pull request.
+118 unit and integration tests run against an isolated PostgreSQL database. Each test runs inside a transaction that is rolled back afterwards, and anything a request doesn't commit is discarded, just like in production. CI runs linting, migrations, a migration drift check and the full test suite on every push and pull request.
 
 ## Roadmap
 
 - [x] Stage 1: Core API, data modeling, testing, query performance
-- [ ] Stage 2: Security (in progress). Done: authentication, authorization, multi-tenancy. Next: refresh tokens, revocation, audit log, RLS, CORS, security headers
+- [ ] Stage 2: Security (in progress). Done: authentication, authorization, multi-tenancy, refresh token rotation, logout, audit log. Next: RLS, CORS, security headers
 - [ ] Stage 3: Caching, rate limiting and load testing
 - [ ] Stage 4: Background jobs, file uploads and notifications
 - [ ] Stage 5: Search, AI matching and observability

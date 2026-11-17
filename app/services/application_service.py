@@ -7,9 +7,10 @@ from app.core.exceptions import (
     InvalidTransitionError,
     NotFoundError,
 )
-from app.models import Application, User
+from app.models import Application, AuditEvent, User
 from app.models.enums import ApplicationStatus, JobStatus, UserRole
 from app.repositories.application_repository import ApplicationRepository
+from app.repositories.audit_repository import AuditRepository
 from app.repositories.job_repository import JobRepository
 from app.repositories.resume_repository import ResumeRepository
 from app.services.access import can_view_job, is_company_recruiter
@@ -22,8 +23,11 @@ class ApplicationService:
         self.applications = ApplicationRepository(db)
         self.jobs = JobRepository(db)
         self.resumes = ResumeRepository(db)
+        self.audit = AuditRepository(db)
 
-    def apply(self, job_id: int, candidate_id: int, resume_id: int) -> Application:
+    def apply(
+        self, job_id: int, candidate_id: int, resume_id: int, *, actor_user_id: int
+    ) -> Application:
         job = self.jobs.get(job_id, lock="share")
         if job is None or job.status != JobStatus.OPEN:
             raise NotFoundError(f"Job {job_id} not found")
@@ -42,6 +46,13 @@ class ApplicationService:
         application = Application(job_id=job_id, candidate_id=candidate_id, resume_id=resume.id)
         try:
             self.applications.add(application)
+            self.audit.record(
+                actor_user_id=actor_user_id,
+                action="application.created",
+                entity_type="application",
+                entity_id=application.id,
+                details={"to": ApplicationStatus.APPLIED.value},
+            )
             self.db.commit()
         except IntegrityError as exc:
             self.db.rollback()
@@ -82,10 +93,22 @@ class ApplicationService:
                 f"Cannot move an application from '{application.status}' to '{new_status}'"
             )
 
+        old_status = application.status
         application.status = new_status
-        self.db.commit()
+        self.audit.record(
+            actor_user_id=user.id,
+            action="application.status_changed",
+            entity_type="application",
+            entity_id=application.id,
+            details={"from": old_status.value, "to": new_status.value},
+        )
+        self.db.commit()  # the status change and its audit row commit together
         self.db.refresh(application)
         return application
+
+    def history(self, application_id: int, viewer: User) -> list[AuditEvent]:
+        self.get_for_viewer(application_id, viewer)  # same visibility rules (404)
+        return self.audit.list_for_entity("application", application_id)
 
     def list_for_candidate(self, candidate_id: int) -> list[Application]:
         return self.applications.list_for_candidate(candidate_id)

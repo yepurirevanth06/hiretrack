@@ -5,6 +5,7 @@ from app.core.pagination import decode_cursor, encode_cursor
 from app.models import Job, User
 from app.models.enums import JobStatus
 from app.repositories.application_repository import ApplicationRepository
+from app.repositories.audit_repository import AuditRepository
 from app.repositories.company_repository import CompanyRepository
 from app.repositories.job_repository import JobRepository
 from app.schemas.job import JobCreate
@@ -77,7 +78,28 @@ class JobService:
             return job, 0
 
         job.status = JobStatus.CLOSED
-        rejected = ApplicationRepository(self.db).reject_active_for_job(job_id)
+        rejected_ids = ApplicationRepository(self.db).reject_active_for_job(job_id)
+
+        audit = AuditRepository(self.db)
+        audit.record(
+            actor_user_id=user.id,
+            action="job.closed",
+            entity_type="job",
+            entity_id=job_id,
+            details={"rejected_applications": len(rejected_ids)},
+        )
+        audit.record_many(
+            [
+                {
+                    "actor_user_id": user.id,
+                    "action": "application.status_changed",
+                    "entity_type": "application",
+                    "entity_id": application_id,
+                    "details": {"to": "rejected", "reason": "job_closed"},
+                }
+                for application_id in rejected_ids
+            ]
+        )
         self.db.commit()
         self.db.refresh(job)
-        return job, rejected
+        return job, len(rejected_ids)

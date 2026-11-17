@@ -4,9 +4,14 @@ from fastapi import APIRouter, Depends, status
 from fastapi.security import OAuth2PasswordRequestForm
 
 from app.api.deps import CurrentUser, DbSession
-from app.core.security import create_access_token
 from app.models import User
-from app.schemas.auth import CandidateRegister, CompanyRegister, Token, UserRead
+from app.schemas.auth import (
+    CandidateRegister,
+    CompanyRegister,
+    RefreshRequest,
+    Token,
+    UserRead,
+)
 from app.schemas.error import ErrorResponse
 from app.services.auth_service import AuthService
 
@@ -38,8 +43,22 @@ def register_company(data: CompanyRegister, db: DbSession) -> User:
 
 @router.post("/token", response_model=Token, responses=UNAUTHORIZED)
 def login(form: Annotated[OAuth2PasswordRequestForm, Depends()], db: DbSession) -> Token:
-    user = AuthService(db).authenticate(form.username, form.password)
-    return Token(access_token=create_access_token(user.id, user.role))
+    return AuthService(db).login(form.username, form.password)
+
+
+@router.post("/refresh", response_model=Token, responses=UNAUTHORIZED)
+def refresh(data: RefreshRequest, db: DbSession) -> Token:
+    return AuthService(db).refresh(data.refresh_token)
+
+
+@router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
+def logout(data: RefreshRequest, db: DbSession) -> None:
+    AuthService(db).logout(data.refresh_token)
+
+
+@router.post("/logout-all", status_code=status.HTTP_204_NO_CONTENT, responses=UNAUTHORIZED)
+def logout_all(user: CurrentUser, db: DbSession) -> None:
+    AuthService(db).logout_all(user)
 
 
 @router.get("/me", response_model=UserRead, responses=UNAUTHORIZED)

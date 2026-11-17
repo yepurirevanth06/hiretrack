@@ -53,7 +53,15 @@ def db() -> Iterator[Session]:
 
 @pytest.fixture
 def client(db: Session) -> Iterator[TestClient]:
-    app.dependency_overrides[get_db] = lambda: db
+    def override_get_db() -> Iterator[Session]:
+        try:
+            yield db
+        finally:
+            # Like the real get_db: whatever a request didn't commit, even when
+            # it fails with an error, is thrown away.
+            db.rollback()
+
+    app.dependency_overrides[get_db] = override_get_db
     with TestClient(app) as test_client:
         yield test_client
     app.dependency_overrides.clear()
