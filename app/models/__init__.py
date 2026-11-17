@@ -1,3 +1,4 @@
+from app.db import rls  # noqa: F401  (registers the RLS setup for create_all)
 from app.models.application import Application
 from app.models.audit_event import AuditEvent
 from app.models.candidate import Candidate

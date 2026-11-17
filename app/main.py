@@ -1,11 +1,24 @@
 from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.api.routes import applications, auth, candidates, companies, health, jobs, me
 from app.core.config import settings
 from app.core.exceptions import AppError
+from app.core.middleware import add_security_headers
 
 app = FastAPI(title=settings.app_name)
+
+app.middleware("http")(add_security_headers)
+# Only the listed origins may call the API from a browser. Tokens travel in the
+# Authorization header, not cookies, so credentials mode stays off.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.cors_origins,
+    allow_methods=["GET", "POST", "PATCH"],
+    allow_headers=["Authorization", "Content-Type"],
+    max_age=600,
+)
 
 
 @app.exception_handler(AppError)

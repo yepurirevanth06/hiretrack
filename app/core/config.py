@@ -13,5 +13,8 @@ class Settings(BaseSettings):
     access_token_minutes: int = 15
     refresh_token_days: int = 7
 
+    # Browser origins allowed to call the API (set as a JSON list in .env).
+    cors_origins: list[str] = ["http://localhost:3000"]
+
 
 settings = Settings()
