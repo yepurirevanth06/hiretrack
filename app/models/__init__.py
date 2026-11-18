@@ -6,6 +6,7 @@ from app.models.company import Company
 from app.models.job import Job
 from app.models.refresh_token import RefreshToken
 from app.models.resume import Resume
+from app.models.resume_profile import ResumeProfile
 from app.models.user import User
 
 __all__ = [
@@ -16,5 +17,6 @@ __all__ = [
     "Job",
     "RefreshToken",
     "Resume",
+    "ResumeProfile",
     "User",
 ]

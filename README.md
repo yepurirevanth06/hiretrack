@@ -56,6 +56,15 @@ Request -> Route (HTTP only) -> Service (business rules, transactions) -> Reposi
 - **CORS and security headers:** only configured browser origins may call the API, and every response sets `X-Content-Type-Options`, `X-Frame-Options`, `Content-Security-Policy`, `Referrer-Policy`, `Cache-Control: no-store` and `Strict-Transport-Security`.
 - **OWASP review:** see [docs/security-review.md](docs/security-review.md) for what is covered and what is still missing.
 
+## AI
+
+- **Resume parsing:** `POST /me/resumes/{id}/parse` takes a PDF or text resume and uses Claude (`claude-haiku-5-5`) with structured outputs to extract skills, experience and education into a validated schema.
+- **Provider interface:** services depend on a small `LLMClient` protocol, not the SDK. Tests use a deterministic `FakeLLM`, so CI needs no API key and costs nothing; one test runs the real SDK against a mocked HTTP transport.
+- **Never trust model output:** results are normalized (deduplicated skills, clamped numbers, length limits) before they are stored.
+- **No paying twice:** results are cached by a SHA-256 hash of the resume text plus model and prompt version, so identical text never reaches the LLM again.
+- **No database connection held during the LLM call:** the transaction is committed before the call, so slow AI requests can't exhaust the connection pool or hold row locks.
+- **Failure handling:** timeouts, rate limits and outages return 503; incomplete or invalid answers return 502; token usage and latency are recorded in the audit log.
+
 ## Performance
 
 Measured locally on **1,000,000 jobs and 300,050 applications** using `EXPLAIN ANALYZE`.
@@ -88,14 +97,14 @@ docker compose exec db psql -U hiretrack -d hiretrack -c "CREATE DATABASE hiretr
 uv run pytest --cov=app
 ```
 
-130 unit and integration tests run against an isolated PostgreSQL database. Each test runs inside a transaction that is rolled back afterwards, and anything a request doesn't commit is discarded, just like in production. CI runs linting, migrations, a migration drift check and the full test suite on every push and pull request.
+156 unit and integration tests run against an isolated PostgreSQL database. Each test runs inside a transaction that is rolled back afterwards, and anything a request doesn't commit is discarded, just like in production. CI runs linting, migrations, a migration drift check and the full test suite on every push and pull request.
 
 ## Roadmap
 
 - [x] Stage 1: Core API, data modeling, testing, query performance
 - [x] Stage 2: Security: authentication, authorization, multi-tenancy, refresh token rotation, audit log, row-level security, CORS, security headers
-- [ ] Stage 3: Caching, rate limiting and load testing
-- [ ] Stage 4: Background jobs, file uploads and notifications
-- [ ] Stage 5: Search, AI matching and observability
-- [ ] Stage 6: Microservices and event streaming
+- [ ] Stage 3: AI (in progress). Done: resume parsing. Next: semantic search with pgvector, candidate matching, prompt injection defenses, evals
+- [ ] Stage 4: Caching, rate limiting and load testing
+- [ ] Stage 5: Background jobs, file uploads and notifications
+- [ ] Stage 6: Observability, microservices and event streaming
 - [ ] Stage 7: Scaling and cloud deployment

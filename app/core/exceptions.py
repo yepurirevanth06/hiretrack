@@ -40,3 +40,27 @@ class UnauthorizedError(AppError):
 class ForbiddenError(AppError):
     status_code = 403
     code = "forbidden"
+
+
+class UnprocessableError(AppError):
+    status_code = 422
+    code = "unprocessable"
+
+
+class PayloadTooLargeError(AppError):
+    status_code = 413
+    code = "payload_too_large"
+
+
+class AIUnavailableError(AppError):
+    """The AI provider couldn't be reached, timed out, or isn't configured."""
+
+    status_code = 503
+    code = "ai_unavailable"
+
+
+class AIOutputError(AppError):
+    """The AI provider answered, but not with something we can use."""
+
+    status_code = 502
+    code = "ai_bad_output"
